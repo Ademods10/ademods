@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Steganografi Teks ke Gambar</title>
+  <style>
+    body { background: #111; color: white; text-align: center; font-family: sans-serif; padding: 20px; }
+    input, button, textarea { margin: 10px; padding: 10px; font-size: 16px; width: 80%; max-width: 500px; }
+    canvas { margin-top: 20px; display: none; }
+  </style>
+</head>
+<body>
+  <h1>🔐 Steganografi Gambar</h1>
+  <input type="file" id="imageInput" accept="image/png"><br>
+  <textarea id="secretText" placeholder="Masukkan teks rahasia..."></textarea><br>
+  <button onclick="hideText()">Sisipkan ke Gambar</button>
+  <button onclick="extractText()">Ekstrak dari Gambar</button><br>
+  <canvas id="canvas"></canvas><br>
+  <a id="downloadLink" style="display: none;" download="gambar_tersembunyi.png">
+    <button>Download Gambar</button>
+  </a>
+  <div id="outputText"></div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let imgData;
+
+    document.getElementById('imageInput').addEventListener('change', function (e) {
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const img = new Image();
+        img.onload = function () {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          canvas.style.display = 'block';
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(e.target.files[0]);
+    });
+
+    function textToBinary(text) {
+      return text.split('').map(char => {
+        return char.charCodeAt(0).toString(2).padStart(8, '0');
+      }).join('') + '00000000'; // delimiter
+    }
+
+    function binaryToText(bin) {
+      let chars = bin.match(/.{1,8}/g).map(byte => String.fromCharCode(parseInt(byte, 2)));
+      return chars.join('').split('\x00')[0];
+    }
+
+    function hideText() {
+      const secret = document.getElementById('secretText').value;
+      const binary = textToBinary(secret);
+      let data = imgData.data;
+
+      if (binary.length > data.length / 4) {
+        alert("Teks terlalu panjang untuk gambar ini.");
+        return;
+      }
+
+      for (let i = 0; i < binary.length; i++) {
+        let index = i * 4;
+        data[index] = (data[index] & 0xFE) | parseInt(binary[i]); // ubah LSB merah
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+
+      // download link
+      const link = document.getElementById('downloadLink');
+      link.href = canvas.toDataURL("image/png");
+      link.style.display = "inline-block";
+    }
+
+    function extractText() {
+      let data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let bin = "";
+      for (let i = 0; i < data.length; i += 4) {
+        bin += (data[i] & 1).toString(); // baca dari LSB merah
+        if (bin.endsWith("00000000")) break; // delimiter
+      }
+
+      const text = binaryToText(bin);
+      document.getElementById('outputText').innerText = "🕵️ Teks Tersembunyi:\n" + text;
+    }
+  </script>
+</body>
+</html>
